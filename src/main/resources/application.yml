@@ -1,0 +1,46 @@
+spring:
+  datasource:
+    url: jdbc:mysql://192.168.2.45:3306/new_putuo?useUnicode=true&characterEncoding=UTF-8&allowMultiQueries=true&useSSL=false&zeroDateTimeBehavior=convertToNull&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    username: root
+    password: UIjJya3urW1Z5LfH6hlyl1zXu3aQRi
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      maximum-pool-size: 20
+      minimum-idle: 5
+  mvc:
+    format:
+      date-time: yyyy-MM-dd HH:mm:ss
+
+
+server:
+  port: 9781
+
+# Swagger
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /doc.html
+    operationsSorter: alpha
+    tagsSorter: alpha
+
+
+# MyBatis Plus
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
+  mapper-locations: classpath*:/mapper/*.xml
+
+
+minio:
+  endpoint:  https://f.hzwp.net
+  accessKey: Mksw54UwwfNNpAbPgVY2
+  secretKey: vNRXEZD2hWefyA1XojQAAdz3EN9r0b1i1lDGGHqx
+  bucketName: gcyg
+  readUrl: //f.hzwp.net/gcyg

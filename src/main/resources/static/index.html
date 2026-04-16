@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据同步工具</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { text-align: center; color: white; margin-bottom: 30px; }
+        .header h1 { font-size: 36px; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); }
+        .header p { font-size: 16px; opacity: 0.9; }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e4e7ed;
+        }
+        .form-row { display: flex; gap: 20px; margin-bottom: 20px; }
+        .form-item { flex: 1; }
+        .form-item.full-width { width: 100%; }
+        .key-value-list {
+            background: #f5f7fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .key-value-item { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
+        .key-value-item:last-child { margin-bottom: 0; }
+        .section-title { font-size: 14px; color: #606266; margin-bottom: 10px; font-weight: 500; }
+        .btn-add { margin-top: 10px; }
+        .action-bar { display: flex; justify-content: center; gap: 15px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e4e7ed; }
+        .result-area {
+            background: #f5f7fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            min-height: 100px;
+        }
+        .result-area pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        .json-key { color: #881391; }
+        .json-string { color: #268bd2; }
+        .json-number { color: #2aa198; }
+        .json-boolean { color: #cb4b16; }
+        .tabs-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        .tab-content { padding: 30px; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <div class="header">
+                <h1>数据同步工具</h1>
+                <p>支持列表数据同步和详情数据同步</p>
+            </div>
+
+            <div class="tabs-container">
+                <el-tabs v-model="activeTab" type="border-card">
+                    <el-tab-pane label="列表数据同步" name="list">
+                        <div class="tab-content">
+                            <div class="card">
+                                <div class="card-title">基础配置</div>
+                                <div class="form-row">
+                                    <div class="form-item">
+                                        <el-form-item label="数据库表名">
+                                            <el-input v-model="listForm.tableName" placeholder="请输入数据库表名" clearable></el-input>
+                                        </el-form-item>
+                                    </div>
+                                    <div class="form-item">
+                                        <el-form-item label="请求方法">
+                                            <el-select v-model="listForm.method" style="width: 100%">
+                                                <el-option label="GET" value="GET"></el-option>
+                                                <el-option label="POST" value="POST"></el-option>
+                                                <el-option label="PUT" value="PUT"></el-option>
+                                            </el-select>
+                                        </el-form-item>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-item full-width">
+                                        <el-form-item label="API接口地址">
+                                            <el-input v-model="listForm.apiUrl" placeholder="请输入外部API接口地址" clearable></el-input>
+                                        </el-form-item>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-item full-width">
+                                        <el-form-item label="数据路径 (可选)">
+                                            <el-input v-model="listForm.dataPath" placeholder="响应数据中列表的路径，如: data.list" clearable></el-input>
+                                        </el-form-item>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <div class="card-title">请求头配置</div>
+                                <div class="key-value-list">
+                                    <div class="section-title">自定义请求头</div>
+                                    <div v-for="(item, index) in listHeaders" :key="index" class="key-value-item">
+                                        <el-input v-model="item.key" placeholder="Header名称" style="width: 200px"></el-input>
+                                        <el-input v-model="item.value" placeholder="Header值" style="flex: 1"></el-input>
+                                        <el-button type="danger" circle size="small" @click="removeListHeader(index)">
+                                            <el-icon><Delete /></el-icon>
+                                        </el-button>
+                                    </div>
+                                    <el-button type="primary" plain class="btn-add" @click="addListHeader" size="small">
+                                        <el-icon><Plus /></el-icon> 添加请求头
+                                    </el-button>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <div class="card-title">请求参数配置</div>
+                                <div class="key-value-list">
+                                    <div class="section-title">请求参数</div>
+                                    <div v-for="(item, index) in listParams" :key="index" class="key-value-item">
+                                        <el-input v-model="item.key" placeholder="参数名" style="width: 200px"></el-input>
+                                        <el-input v-model="item.value" placeholder="参数值" style="flex: 1"></el-input>
+                                        <el-button type="danger" circle size="small" @click="removeListParam(index)">
+                                            <el-icon><Delete /></el-icon>
+                                        </el-button>
+                                    </div>
+                                    <el-button type="primary" plain class="btn-add" @click="addListParam" size="small">
+                                        <el-icon><Plus /></el-icon> 添加参数
+                                    </el-button>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <div class="card-title">字段映射配置 (可选)</div>
+                                <div class="key-value-list">
+                                    <div class="section-title">字段映射 (API字段名 → 数据库字段名)</div>
+                                    <div v-for="(item, index) in listFieldMapping" :key="index" class="key-value-item">
+                                        <el-input v-model="item.key" placeholder="API返回字段名" style="width: 200px"></el-input>
+                                        <span style="color: #909399">→</span>
+                                        <el-input v-model="item.value" placeholder="数据库字段名" style="flex: 1"></el-input>
+                                        <el-button type="danger" circle size="small" @click="removeListFieldMapping(index)">
+                                            <el-icon><Delete /></el-icon>
+                                        </el-button>
+                                    </div>
+                                    <el-button type="primary" plain class="btn-add" @click="addListFieldMapping" size="small">
+                                        <el-icon><Plus /></el-icon> 添加字段映射
+                                    </el-button>
+                                </div>
+                            </div>
+
+                            <div class="action-bar">
+                                <el-button type="primary" size="large" :loading="listLoading" @click="syncListData">
+                                    <el-icon><Promotion /></el-icon> 开始同步
+                                </el-button>
+                                <el-button size="large" @click="resetListForm">
+                                    <el-icon><RefreshLeft /></el-icon> 重置
+                                </el-button>
+                            </div>
+
+                            <div class="card" v-if="listResult">
+                                <div class="card-title">同步结果</div>
+                                <div class="result-area">
+                                    <pre v-html="formatJson(listResult)"></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </el-tab-pane>
+
+                    <el-tab-pane label="详情数据同步" name="detail">
+                        <div class="tab-content">
+                            <div class="card">
+                                <div class="card-title">源表配置（已同步的列表数据表）</div>
+                                <div class="form-row">
+                                    <div class="form-item">
+                                        <el-form-item label="源表表名">
+                                            <el-input v-model="detailForm.sourceTableName" placeholder="请输入已同步数据的源表名" clearable></el-input>
+                                        </el-form-item>
+                                    </div>
+                                    <div class="form-item">
+                                        <el-form-item label="源表字段名">
+                                            <el-input v-model="detailForm.sourceFieldName" placeholder="源表中用于查询的字段，如: id" clearable></el-input>
+                                        </el-form-item>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-item full-width">
+                                        <el-form-item label="API查询参数字段名 (可选)">
+                                            <el-input v-model="detailForm.apiQueryFieldName" placeholder="API接口的查询参数字段名，如: indexId，支持多个用逗号分隔" clearable>
+                                                <template #append>
+                                                    <el-tooltip content="如果API接口的查询参数名与源表字段名不同，在此指定，多个用逗号分隔与源表字段一一对应" placement="top">
+                                                        <el-icon><QuestionFilled /></el-icon>
+                                                    </el-tooltip>
+                                                </template>
+                                            </el-input>
+                                        </el-form-item>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <div class="card-title">参数配置</div>
+                                
+                                <!-- GET 请求查询参数 -->
+                                <div v-if="detailForm.method === 'GET'">
+                                    <div class="section-title">GET 查询参数映射 (源表字段名 → API查询参数字段名)</div>
+                                    <div class="key-value-list">
+                                        <div v-for="(item, index) in detailQueryParams" :key="index" class="key-value-item">
+                                            <el-input v-model="item.sourceField" placeholder="源表字段名" style="width: 200px"></el-input>
+                                            <span style="color: #909399">→</span>
+                                            <el-input v-model="item.apiField" placeholder="API查询参数字段名" style="flex: 1"></el-input>
+                                            <el-button type="danger" circle size="small" @click="removeDetailQueryParam(index)">
+                                                <el-icon><Delete /></el-icon>
+                                            </el-button>
+                                        </div>
+                                        <el-button type="primary" plain class="btn-add" @click="addDetailQueryParam" size="small">
+                                            <el-icon><Plus /></el-icon> 添加查询参数
+                                        </el-button>
+                                    </div>
+                                </div>
+                                
+                                <!-- POST/PUT 表单参数 -->
+                                <div v-if="(detailForm.method === 'POST' || detailForm.method === 'PUT') && detailForm.bodyType === 'FORM'">
+                                    <div class="section-title">POST/PUT 表单参数映射 (源表字段名 → 表单字段名)</div>
+                                    <div class="key-value-list">
+                                        <div v-for="(item, index) in detailFormParams" :key="index" class="key-value-item">
+                                            <el-input v-model="item.sourceField" placeholder="源表字段名" style="width: 200px"></el-input>
+                                            <span style="color: #909399">→</span>
+                                            <el-input v-model="item.apiField" placeholder="表单字段名" style="flex: 1"></el-input>
+                                            <el-button type="danger" circle size="small" @click="removeDetailFormParam(index)">
+                                                <el-icon><Delete /></el-icon>
+                                            </el-button>
+                                        </div>
+                                        <el-button type="primary" plain class="btn-add" @click="addDetailFormParam" size="small">
+                                            <el-icon><Plus /></el-icon> 添加表单参数
+                                        </el-button>
+                                    </div>
+                                </div>
+                                
+                                <!-- 自定义固定参数 -->
+                                <div class="section-title" style="margin-top: 15px;">自定义固定参数 (所有请求都会携带)</div>
+                                <div class="key-value-list">
+                                    <div v-for="(item, index) in detailCustomParams" :key="index" class="key-value-item">
+                                        <el-input v-model="item.key" placeholder="参数名" style="width: 200px"></el-input>
+                                        <span style="color: #909399">=</span>
+                                        <el-input v-model="item.value" placeholder="参数值" style="flex: 1"></el-input>
+                                        <el-button type="danger" circle size="small" @click="removeDetailCustomParam(index)">
+                                            <el-icon><Delete /></el-icon>
+                                        </el-button>
+                                    </div>
+                                    <el-button type="primary" plain class="btn-add" @click="addDetailCustomParam" size="small">
+                                        <el-icon><Plus /></el-icon> 添加自定义参数
+                                    </el-button>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <div class="card-title">目标表配置（详情数据保存表）</div>
+                                <div class="form-row">
+                                    <div class="form-item full-width">
+                                        <el-form-item label="目标表表名">
+                                            <el-input v-model="detailForm.targetTableName" placeholder="请输入保存详情数据的目标表名" clearable></el-input>
+                                        </el-form-item>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <div class="card-title">详情接口配置</div>
+                                <div class="form-row">
+                                    <div class="form-item">
+                                        <el-form-item label="请求方法">
+                                            <el-select v-model="detailForm.method" style="width: 100%" @change="onMethodChange">
+                                                <el-option label="GET" value="GET"></el-option>
+                                                <el-option label="POST" value="POST"></el-option>
+                                                <el-option label="PUT" value="PUT"></el-option>
+                                            </el-select>
+                                        </el-form-item>
+                                    </div>
+                                    <div class="form-item" v-if="detailForm.method === 'POST' || detailForm.method === 'PUT'">
+                                        <el-form-item label="请求体类型">
+                                            <el-select v-model="detailForm.bodyType" style="width: 100%">
+                                                <el-option label="表单参数 (FORM)" value="FORM"></el-option>
+                                                <el-option label="JSON格式 (JSON)" value="JSON"></el-option>
+                                            </el-select>
+                                        </el-form-item>
+                                    </div>
+                                    <div class="form-item" v-else>
+                                        <el-form-item label="请求间隔(ms)">
+                                            <el-input-number v-model="detailForm.intervalMs" :min="0" :max="5000" :step="100" style="width: 100%"></el-input-number>
+                                        </el-form-item>
+                                    </div>
+                                </div>
+                                <div class="form-row" v-if="(detailForm.method === 'POST' || detailForm.method === 'PUT') && detailForm.bodyType === 'JSON'">
+                                    <div class="form-item full-width">
+                                        <el-form-item label="JSON请求体模板">
+                                            <el-input v-model="detailForm.bodyTemplate" type="textarea" :rows="3" placeholder='{"indexId": "{value}", "type": "1"}  使用{value}作为占位符，会被替换为源表字段值' clearable></el-input>
+                                        </el-form-item>
+                                    </div>
+                                </div>
+                                <div class="form-row" v-if="detailForm.method === 'POST' || detailForm.method === 'PUT'">
+                                    <div class="form-item">
+                                        <el-form-item label="请求间隔(ms)">
+                                            <el-input-number v-model="detailForm.intervalMs" :min="0" :max="5000" :step="100" style="width: 100%"></el-input-number>
+                                        </el-form-item>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-item full-width">
+                                        <el-form-item label="详情接口URL模板">
+                                            <el-input v-model="detailForm.detailApiUrlTemplate" placeholder="支持两种格式: 1.路径参数 /api/detail/{value}  2.查询参数 /api/detail" clearable>
+                                                <template #append>
+                                                    <el-tooltip content="路径参数模式用{value}占位；查询参数模式会自动附加?apiQueryFieldName=value" placement="top">
+                                                        <el-icon><QuestionFilled /></el-icon>
+                                                    </el-tooltip>
+                                                </template>
+                                            </el-input>
+                                        </el-form-item>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-item full-width">
+                                        <el-form-item label="数据路径 (可选)">
+                                            <el-input v-model="detailForm.dataPath" placeholder="响应数据中详情对象的路径，如: data" clearable></el-input>
+                                        </el-form-item>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <div class="card-title">请求头配置</div>
+                                <div class="key-value-list">
+                                    <div class="section-title">自定义请求头</div>
+                                    <div v-for="(item, index) in detailHeaders" :key="index" class="key-value-item">
+                                        <el-input v-model="item.key" placeholder="Header名称" style="width: 200px"></el-input>
+                                        <el-input v-model="item.value" placeholder="Header值" style="flex: 1"></el-input>
+                                        <el-button type="danger" circle size="small" @click="removeDetailHeader(index)">
+                                            <el-icon><Delete /></el-icon>
+                                        </el-button>
+                                    </div>
+                                    <el-button type="primary" plain class="btn-add" @click="addDetailHeader" size="small">
+                                        <el-icon><Plus /></el-icon> 添加请求头
+                                    </el-button>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <div class="card-title">字段映射配置 (可选)</div>
+                                <div class="key-value-list">
+                                    <div class="section-title">字段映射 (API字段名 → 数据库字段名)</div>
+                                    <div v-for="(item, index) in detailFieldMapping" :key="index" class="key-value-item">
+                                        <el-input v-model="item.key" placeholder="API返回字段名" style="width: 200px"></el-input>
+                                        <span style="color: #909399">→</span>
+                                        <el-input v-model="item.value" placeholder="数据库字段名" style="flex: 1"></el-input>
+                                        <el-button type="danger" circle size="small" @click="removeDetailFieldMapping(index)">
+                                            <el-icon><Delete /></el-icon>
+                                        </el-button>
+                                    </div>
+                                    <el-button type="primary" plain class="btn-add" @click="addDetailFieldMapping" size="small">
+                                        <el-icon><Plus /></el-icon> 添加字段映射
+                                    </el-button>
+                                </div>
+                            </div>
+
+                            <div class="action-bar">
+                                <el-button type="success" size="large" :loading="detailLoading" @click="syncDetailData">
+                                    <el-icon><Promotion /></el-icon> 开始同步详情
+                                </el-button>
+                                <el-button size="large" @click="resetDetailForm">
+                                    <el-icon><RefreshLeft /></el-icon> 重置
+                                </el-button>
+                            </div>
+
+                            <div class="card" v-if="detailResult">
+                                <div class="card-title">同步结果</div>
+                                <div class="result-area">
+                                    <pre v-html="formatJson(detailResult)"></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </el-tab-pane>
+                </el-tabs>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive } = Vue;
+        const { ElMessage } = ElementPlus;
+
+        const app = createApp({
+            setup() {
+                const activeTab = ref('list');
+
+                const listForm = reactive({
+                    tableName: '',
+                    apiUrl: '',
+                    method: 'GET',
+                    dataPath: ''
+                });
+                const listHeaders = ref([{ key: 'Content-Type', value: 'application/json' }]);
+                const listParams = ref([]);
+                const listFieldMapping = ref([]);
+                const listLoading = ref(false);
+                const listResult = ref(null);
+
+                const detailForm = reactive({
+                    sourceTableName: '',
+                    targetTableName: '',
+                    sourceFieldName: '',
+                    apiQueryFieldName: '',
+                    detailApiUrlTemplate: '',
+                    method: 'GET',
+                    bodyType: 'FORM',
+                    bodyTemplate: '',
+                    dataPath: '',
+                    intervalMs: 100
+                });
+                const detailHeaders = ref([{ key: 'Content-Type', value: 'application/json' }]);
+                const detailFieldMapping = ref([]);
+                const detailQueryParams = ref([]);
+                const detailFormParams = ref([]);
+                const detailCustomParams = ref([]);
+                const detailLoading = ref(false);
+                const detailResult = ref(null);
+
+                const addListHeader = () => listHeaders.value.push({ key: '', value: '' });
+                const removeListHeader = (index) => listHeaders.value.splice(index, 1);
+                const addListParam = () => listParams.value.push({ key: '', value: '' });
+                const removeListParam = (index) => listParams.value.splice(index, 1);
+                const addListFieldMapping = () => listFieldMapping.value.push({ key: '', value: '' });
+                const removeListFieldMapping = (index) => listFieldMapping.value.splice(index, 1);
+
+                const addDetailHeader = () => detailHeaders.value.push({ key: '', value: '' });
+                const removeDetailHeader = (index) => detailHeaders.value.splice(index, 1);
+                const addDetailFieldMapping = () => detailFieldMapping.value.push({ key: '', value: '' });
+                const removeDetailFieldMapping = (index) => detailFieldMapping.value.splice(index, 1);
+                const addDetailQueryParam = () => detailQueryParams.value.push({ sourceField: '', apiField: '' });
+                const removeDetailQueryParam = (index) => detailQueryParams.value.splice(index, 1);
+                const addDetailFormParam = () => detailFormParams.value.push({ sourceField: '', apiField: '' });
+                const removeDetailFormParam = (index) => detailFormParams.value.splice(index, 1);
+                const addDetailCustomParam = () => detailCustomParams.value.push({ key: '', value: '' });
+                const removeDetailCustomParam = (index) => detailCustomParams.value.splice(index, 1);
+
+                const buildKeyValueObject = (list) => {
+                    const obj = {};
+                    list.forEach(item => {
+                        if (item.key) {
+                            obj[item.key] = item.value;
+                        }
+                    });
+                    return obj;
+                };
+
+                const buildFieldMappingObject = (list) => {
+                    const obj = {};
+                    list.forEach(item => {
+                        if (item.sourceField && item.apiField) {
+                            obj[item.sourceField] = item.apiField;
+                        }
+                    });
+                    return obj;
+                };
+
+                const onMethodChange = (val) => {
+                    if (val !== 'POST' && val !== 'PUT') {
+                        detailForm.bodyType = 'FORM';
+                        detailForm.bodyTemplate = '';
+                    }
+                };
+
+                const syncListData = async () => {
+                    if (!listForm.tableName) {
+                        ElMessage.error('请输入数据库表名');
+                        return;
+                    }
+                    if (!listForm.apiUrl) {
+                        ElMessage.error('请输入API接口地址');
+                        return;
+                    }
+
+                    listLoading.value = true;
+                    listResult.value = null;
+
+                    const requestData = {
+                        tableName: listForm.tableName,
+                        apiUrl: listForm.apiUrl,
+                        method: listForm.method,
+                        dataPath: listForm.dataPath || undefined,
+                        headers: buildKeyValueObject(listHeaders.value),
+                        params: buildKeyValueObject(listParams.value),
+                        fieldMapping: buildKeyValueObject(listFieldMapping.value)
+                    };
+
+                    try {
+                        const response = await axios.post('/api/sync/data', requestData);
+                        listResult.value = response.data;
+                        if (response.data.code === 200) {
+                            ElMessage.success(response.data.msg || '同步成功');
+                        } else {
+                            ElMessage.error(response.data.msg || '同步失败');
+                        }
+                    } catch (error) {
+                        ElMessage.error('请求失败: ' + (error.response?.data?.msg || error.message));
+                        listResult.value = { error: error.message, response: error.response?.data };
+                    } finally {
+                        listLoading.value = false;
+                    }
+                };
+
+                const resetListForm = () => {
+                    listForm.tableName = '';
+                    listForm.apiUrl = '';
+                    listForm.method = 'GET';
+                    listForm.dataPath = '';
+                    listHeaders.value = [{ key: 'Content-Type', value: 'application/json' }];
+                    listParams.value = [];
+                    listFieldMapping.value = [];
+                    listResult.value = null;
+                    ElMessage.success('已重置');
+                };
+
+                const syncDetailData = async () => {
+                    if (!detailForm.sourceTableName) {
+                        ElMessage.error('请输入源表表名');
+                        return;
+                    }
+                    if (!detailForm.targetTableName) {
+                        ElMessage.error('请输入目标表表名');
+                        return;
+                    }
+                    if (!detailForm.sourceFieldName) {
+                        ElMessage.error('请输入源表字段名');
+                        return;
+                    }
+                    if (!detailForm.detailApiUrlTemplate) {
+                        ElMessage.error('请输入详情接口URL模板');
+                        return;
+                    }
+
+                    detailLoading.value = true;
+                    detailResult.value = null;
+
+                    const requestData = {
+                        sourceTableName: detailForm.sourceTableName,
+                        targetTableName: detailForm.targetTableName,
+                        sourceFieldName: detailForm.sourceFieldName,
+                        apiQueryFieldName: detailForm.apiQueryFieldName || undefined,
+                        detailApiUrlTemplate: detailForm.detailApiUrlTemplate,
+                        method: detailForm.method,
+                        bodyType: detailForm.bodyType,
+                        bodyTemplate: detailForm.bodyTemplate || undefined,
+                        dataPath: detailForm.dataPath || undefined,
+                        intervalMs: detailForm.intervalMs,
+                        headers: buildKeyValueObject(detailHeaders.value),
+                        fieldMapping: buildKeyValueObject(detailFieldMapping.value),
+                        queryParamMapping: buildFieldMappingObject(detailQueryParams.value),
+                        formParamMapping: buildFieldMappingObject(detailFormParams.value),
+                        customParams: buildKeyValueObject(detailCustomParams.value)
+                    };
+
+                    try {
+                        const response = await axios.post('/api/sync/detail', requestData);
+                        detailResult.value = response.data;
+                        if (response.data.code === 200) {
+                            ElMessage.success(response.data.msg || '详情同步成功');
+                        } else {
+                            ElMessage.error(response.data.msg || '详情同步失败');
+                        }
+                    } catch (error) {
+                        ElMessage.error('请求失败: ' + (error.response?.data?.msg || error.message));
+                        detailResult.value = { error: error.message, response: error.response?.data };
+                    } finally {
+                        detailLoading.value = false;
+                    }
+                };
+
+                const resetDetailForm = () => {
+                    detailForm.sourceTableName = '';
+                    detailForm.targetTableName = '';
+                    detailForm.sourceFieldName = '';
+                    detailForm.apiQueryFieldName = '';
+                    detailForm.detailApiUrlTemplate = '';
+                    detailForm.method = 'GET';
+                    detailForm.bodyType = 'FORM';
+                    detailForm.bodyTemplate = '';
+                    detailForm.dataPath = '';
+                    detailForm.intervalMs = 100;
+                    detailHeaders.value = [{ key: 'Content-Type', value: 'application/json' }];
+                    detailFieldMapping.value = [];
+                    detailQueryParams.value = [];
+                    detailFormParams.value = [];
+                    detailCustomParams.value = [];
+                    detailResult.value = null;
+                    ElMessage.success('已重置');
+                };
+
+                const formatJson = (data) => {
+                    const json = JSON.stringify(data, null, 2);
+                    return json
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/(".*?"):/g, '<span class="json-key">$1</span>:')
+                        .replace(/: "(.*?)"/g, ': <span class="json-string">"$1"</span>')
+                        .replace(/: (\d+)/g, ': <span class="json-number">$1</span>')
+                        .replace(/: (true|false)/g, ': <span class="json-boolean">$1</span>');
+                };
+
+                return {
+                    activeTab,
+                    listForm,
+                    listHeaders,
+                    listParams,
+                    listFieldMapping,
+                    listLoading,
+                    listResult,
+                    detailForm,
+                    detailHeaders,
+                    detailFieldMapping,
+                    detailLoading,
+                    detailResult,
+                    addListHeader,
+                    removeListHeader,
+                    addListParam,
+                    removeListParam,
+                    addListFieldMapping,
+                    removeListFieldMapping,
+                    detailQueryParams,
+                    detailFormParams,
+                    detailCustomParams,
+                    addDetailHeader,
+                    removeDetailHeader,
+                    addDetailFieldMapping,
+                    removeDetailFieldMapping,
+                    addDetailQueryParam,
+                    removeDetailQueryParam,
+                    addDetailFormParam,
+                    removeDetailFormParam,
+                    addDetailCustomParam,
+                    removeDetailCustomParam,
+                    onMethodChange,
+                    syncListData,
+                    resetListForm,
+                    syncDetailData,
+                    resetDetailForm,
+                    formatJson
+                };
+            }
+        });
+
+        app.use(ElementPlus);
+        app.mount('#app');
+    </script>
+</body>
+</html>
